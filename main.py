@@ -1,4 +1,4 @@
-import os, sys
+import os
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -8,11 +8,28 @@ from omegaconf import DictConfig
 import wandb
 from termcolor import cprint
 from tqdm import tqdm
+from torchvision import transforms
 
 from src.datasets import ThingsMEGDataset
 from src.models import BasicConvClassifier
 from src.utils import set_seed
 
+# Augmented dataset class with data augmentation and normalization
+class AugmentedMEGDataset(ThingsMEGDataset):
+    def __init__(self, split, data_dir):
+        super().__init__(split, data_dir)
+        self.transform = transforms.Compose([
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomRotation(10),
+            transforms.RandomResizedCrop((224, 224), scale=(0.8, 1.0)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
+
+    def __getitem__(self, index):
+        image, label, subject_idx = super().__getitem__(index)
+        image = self.transform(image)
+        return image, label, subject_idx
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def run(args: DictConfig):
@@ -27,7 +44,7 @@ def run(args: DictConfig):
     # ------------------
     loader_args = {"batch_size": args.batch_size, "num_workers": args.num_workers}
     
-    train_set = ThingsMEGDataset("train", args.data_dir)
+    train_set = AugmentedMEGDataset("train", args.data_dir)
     train_loader = torch.utils.data.DataLoader(train_set, shuffle=True, **loader_args)
     val_set = ThingsMEGDataset("val", args.data_dir)
     val_loader = torch.utils.data.DataLoader(val_set, shuffle=False, **loader_args)
@@ -43,10 +60,13 @@ def run(args: DictConfig):
         train_set.num_classes, train_set.seq_len, train_set.num_channels
     ).to(args.device)
 
+    # Add dropout to the model for regularization
+    model.dropout = torch.nn.Dropout(p=0.5)
+
     # ------------------
     #     Optimizer
     # ------------------
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
     # ------------------
     #   Start training
