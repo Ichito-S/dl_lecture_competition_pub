@@ -1,9 +1,10 @@
-batch_size: 32
-epochs: 100
+batch_size: 64
+epochs: 5
 lr: 0.001
-
+dropout_prob: 0.5
+weight_decay: 1e-5
 device: cuda:0
-num_workers: 4
+num_workers: 0
 seed: 1234
 use_wandb: False
 

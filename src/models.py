@@ -3,20 +3,19 @@ import torch.nn as nn
 import torch.nn.functional as F
 from einops.layers.torch import Rearrange
 
-
-class BasicConvClassifier(nn.Module):
+class ExtendedConvClassifier(nn.Module):
     def __init__(
         self,
         num_classes: int,
         seq_len: int,
         in_channels: int,
-        hid_dim: int = 128
+        hid_dim: int = 256,  # Increased hidden dimension
+        num_blocks: int = 4  # Increased number of blocks
     ) -> None:
         super().__init__()
 
         self.blocks = nn.Sequential(
-            ConvBlock(in_channels, hid_dim),
-            ConvBlock(hid_dim, hid_dim),
+            *[ConvBlock(hid_dim if i != 0 else in_channels, hid_dim) for i in range(num_blocks)]
         )
 
         self.head = nn.Sequential(
@@ -33,7 +32,6 @@ class BasicConvClassifier(nn.Module):
             X ( b, num_classes ): _description_
         """
         X = self.blocks(X)
-
         return self.head(X)
 
 
@@ -52,7 +50,6 @@ class ConvBlock(nn.Module):
 
         self.conv0 = nn.Conv1d(in_dim, out_dim, kernel_size, padding="same")
         self.conv1 = nn.Conv1d(out_dim, out_dim, kernel_size, padding="same")
-        # self.conv2 = nn.Conv1d(out_dim, out_dim, kernel_size) # , padding="same")
         
         self.batchnorm0 = nn.BatchNorm1d(num_features=out_dim)
         self.batchnorm1 = nn.BatchNorm1d(num_features=out_dim)
@@ -69,8 +66,5 @@ class ConvBlock(nn.Module):
 
         X = self.conv1(X) + X  # skip connection
         X = F.gelu(self.batchnorm1(X))
-
-        # X = self.conv2(X)
-        # X = F.glu(X, dim=-2)
 
         return self.dropout(X)
